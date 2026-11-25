@@ -1,9 +1,6 @@
 // Tiny stack VM for make.fun's tiny-stack-vm-01 ISA (ISA.md, version 1).
-// Revision note (second pass, 2026-11-25): no logic change — this pass
-// documents the execution limits and names the step/output caps so the
-// limits are visible at the top of the file, not only in the loop below.
-// Limits: at most 1,000,000 steps per run (trap 10) and at most 65,536
-// output bytes per run (trap 11); both traps keep output written so far.
+// Second pass (2026-11-25): no logic change — the step/output caps are
+// named at the top of the file, not only in the loop below.
 // One program, run as `node main.ts`, answers i001..i040: for each it reads
 // /input/<id>/program.bin + input.bin and writes /output/<id>/stdout.bin
 // and /output/<id>/exit.txt. Values are 32-bit wrapping ints, the data
@@ -15,8 +12,7 @@ import { join } from 'node:path';
 
 // Opcode metadata: [byte, immediate bytes, values popped, values pushed].
 // Built once into indexed tables; an opcode absent from the list is unknown.
-// Execution limits (ISA.md): step cap and output-byte cap, named once
-// so the loop and output opcodes below share the same values.
+// Caps named once for the loop and output opcodes below.
 const MAX_STEPS = 1_000_000;
 const MAX_OUTPUT = 65_536;
 
@@ -49,8 +45,7 @@ function run(p, inp) {
   let sp = 0, cp = 0, ol = 0, ip = 0, pc = 0, steps = 0;
   const done = (code) => ({ out: out.slice(0, ol), code });
   for (;;) {
-    // Step order is the ISA's: step limit, pc bounds, unknown opcode,
-    // truncated immediate, then the step itself (stack checks first).
+    // ISA step order: limit, bounds, opcode, immediate, then step.
     if (steps === MAX_STEPS) return done(10);
     if (pc < 0 || pc >= n) return done(9);
     const op = p[pc];
