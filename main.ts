@@ -1,4 +1,9 @@
 // Tiny stack VM for make.fun's tiny-stack-vm-01 ISA (ISA.md, version 1).
+// Revision note (second pass, 2026-11-25): no logic change — this pass
+// documents the execution limits and names the step/output caps so the
+// limits are visible at the top of the file, not only in the loop below.
+// Limits: at most 1,000,000 steps per run (trap 10) and at most 65,536
+// output bytes per run (trap 11); both traps keep output written so far.
 // One program, run as `node main.ts`, answers i001..i040: for each it reads
 // /input/<id>/program.bin + input.bin and writes /output/<id>/stdout.bin
 // and /output/<id>/exit.txt. Values are 32-bit wrapping ints, the data
@@ -10,6 +15,11 @@ import { join } from 'node:path';
 
 // Opcode metadata: [byte, immediate bytes, values popped, values pushed].
 // Built once into indexed tables; an opcode absent from the list is unknown.
+// Execution limits (ISA.md): step cap and output-byte cap, named once
+// so the loop and output opcodes below share the same values.
+const MAX_STEPS = 1_000_000;
+const MAX_OUTPUT = 65_536;
+
 const META = [
   [0x00, 0, 0, 0], [0x01, 1, 0, 1], [0x02, 4, 0, 1], [0x03, 0, 1, 0],
   [0x04, 0, 1, 2], [0x05, 0, 2, 2], [0x06, 0, 2, 3], [0x07, 0, 3, 3],
@@ -35,13 +45,13 @@ function run(p, inp) {
   const D = new Int32Array(256); // data stack
   const C = new Int32Array(64);  // return addresses
   const M = new Int32Array(256); // memory, all zero at start
-  const out = new Uint8Array(65536);
+  const out = new Uint8Array(MAX_OUTPUT);
   let sp = 0, cp = 0, ol = 0, ip = 0, pc = 0, steps = 0;
   const done = (code) => ({ out: out.slice(0, ol), code });
   for (;;) {
     // Step order is the ISA's: step limit, pc bounds, unknown opcode,
     // truncated immediate, then the step itself (stack checks first).
-    if (steps === 1000000) return done(10);
+    if (steps === MAX_STEPS) return done(10);
     if (pc < 0 || pc >= n) return done(9);
     const op = p[pc];
     if (!KNOWN[op]) return done(5);
@@ -130,13 +140,13 @@ function run(p, inp) {
       }
       case 0x50: {
         const s = String(D[sp - 1]);
-        if (ol + s.length > 65536) return done(11); // writes none of its bytes
+        if (ol + s.length > MAX_OUTPUT) return done(11); // writes none of its bytes
         sp--;
         for (let i = 0; i < s.length; i++) out[ol++] = s.charCodeAt(i);
         break;
       }
       case 0x51:
-        if (ol + 1 > 65536) return done(11);
+        if (ol + 1 > MAX_OUTPUT) return done(11);
         out[ol++] = D[--sp] & 255;
         break;
       case 0x52: D[sp++] = ip < inp.length ? inp[ip++] : -1; break; // -1 after input ends
